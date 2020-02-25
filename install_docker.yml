@@ -1,0 +1,47 @@
+---
+- hosts: "{{ variable_host | default('all') }}"
+  strategy: free
+  remote_user: root
+  vars:
+    main_user: changeme
+    docker_ce_repo_name: https://download.docker.com/linux/centos/docker-ce.repo
+    docker_ce_repo_path: /etc/yum.repos.d/docker-ce.repo
+  
+  tasks:
+    - name:  Install yum utils, device mapper, lvm2
+      package: name={{ item }} state=present
+      with_items: 
+          -  yum-utils
+          -  device-mapper-persistent-data
+    
+    - stat: path = {{ docker_ce_repo_path }}
+      register: docker_installed
+    - debug:
+        msg: "Path exists and is a directory"
+      when: docker_installed.stat.isdir is defined and docker_installed.stat.isdir
+
+    - name:  Install yum-config-manager
+      command: yum-config-manager --add-repo {{ docker_ce_repo_name }}
+      when: docker_installed.stat.exists == False
+      
+    - name:  Install docker-ce, docker-ce-cli, containerd.io
+      package: name={{ item }} state=present
+      with_items: 
+          -  docker-ce 
+          -  docker-ce-cli 
+          -  containerd.io
+
+    - name: Start docker
+      service:
+        name: docker
+        state: started
+
+    - name: Add docker group
+      group: 
+        name: docker
+        state: present
+      ignore_errors: yes
+      
+    - name: Add main user to user docker
+      command: usermod -aG docker {{ main_user }}
+      ignore_errors: yes
